@@ -18,9 +18,11 @@ type OpenRouterMessagePart = {
 
 type OpenRouterResponse = {
   choices?: Array<{
+    finish_reason?: string | null;
+    native_finish_reason?: string | null;
     message?: {
       images?: OpenRouterImageEntry[];
-      content?: string | OpenRouterMessagePart[];
+      content?: string | OpenRouterMessagePart[] | null;
     };
   }>;
 };
@@ -103,7 +105,7 @@ function inferImageSize(size: string | null): "1K" | "2K" | "4K" | null {
   return "4K";
 }
 
-function getImageSize(args: CliArgs): "1K" | "2K" | "4K" {
+export function getImageSize(args: CliArgs): "1K" | "2K" | "4K" {
   if (args.imageSize) return args.imageSize as "1K" | "2K" | "4K";
 
   const inferredFromSize = inferImageSize(args.size);
@@ -112,7 +114,7 @@ function getImageSize(args: CliArgs): "1K" | "2K" | "4K" {
   return args.quality === "normal" ? "1K" : "2K";
 }
 
-function getAspectRatio(args: CliArgs): string | null {
+export function getAspectRatio(args: CliArgs): string | null {
   return args.aspectRatio || inferAspectRatio(args.size);
 }
 
@@ -129,7 +131,14 @@ async function readImageAsDataUrl(filePath: string): Promise<string> {
   return `data:${getMimeType(filePath)};base64,${bytes.toString("base64")}`;
 }
 
-function buildContent(prompt: string, referenceImages: string[]): Array<Record<string, unknown>> {
+export function buildContent(
+  prompt: string,
+  referenceImages: string[],
+): string | Array<Record<string, unknown>> {
+  if (referenceImages.length === 0) {
+    return prompt;
+  }
+
   const content: Array<Record<string, unknown>> = [{ type: "text", text: prompt }];
 
   for (const imageUrl of referenceImages) {
@@ -171,8 +180,9 @@ async function downloadImage(value: string): Promise<Uint8Array> {
   return Uint8Array.from(Buffer.from(value, "base64"));
 }
 
-async function extractImageFromResponse(result: OpenRouterResponse): Promise<Uint8Array> {
-  const message = result.choices?.[0]?.message;
+export async function extractImageFromResponse(result: OpenRouterResponse): Promise<Uint8Array> {
+  const choice = result.choices?.[0];
+  const message = choice?.message;
 
   for (const image of message?.images ?? []) {
     const imageUrl = extractImageUrl(image);
@@ -194,7 +204,38 @@ async function extractImageFromResponse(result: OpenRouterResponse): Promise<Uin
     if (inline) return inline;
   }
 
-  throw new Error("No image in OpenRouter response");
+  const finishReason =
+    choice?.native_finish_reason || choice?.finish_reason || "unknown";
+  throw new Error(
+    `No image in OpenRouter response (finish_reason=${finishReason})`,
+  );
+}
+
+export function buildRequestBody(
+  prompt: string,
+  args: CliArgs,
+  referenceImages: string[],
+): Record<string, unknown> {
+  const imageConfig: Record<string, string> = {
+    image_size: getImageSize(args),
+  };
+
+  const aspectRatio = getAspectRatio(args);
+  if (aspectRatio) {
+    imageConfig.aspect_ratio = aspectRatio;
+  }
+
+  return {
+    messages: [
+      {
+        role: "user",
+        content: buildContent(prompt, referenceImages),
+      },
+    ],
+    modalities: ["image", "text"],
+    image_config: imageConfig,
+    stream: false,
+  };
 }
 
 export async function generateImage(
@@ -212,32 +253,15 @@ export async function generateImage(
     referenceImages.push(await readImageAsDataUrl(refPath));
   }
 
-  const imageGenerationOptions: Record<string, string> = {
-    size: getImageSize(args),
-  };
-
-  const aspectRatio = getAspectRatio(args);
-  if (aspectRatio) {
-    imageGenerationOptions.aspect_ratio = aspectRatio;
-  }
-
   const body = {
     model,
-    messages: [
-      {
-        role: "user",
-        content: buildContent(prompt, referenceImages),
-      },
-    ],
-    modalities: ["image", "text"],
-    max_tokens: 256,
-    imageGenerationOptions,
-    providerPreferences: {
-      require_parameters: true,
-    },
+    ...buildRequestBody(prompt, args, referenceImages),
   };
 
-  console.log(`Generating image with OpenRouter (${model})...`, imageGenerationOptions);
+  console.log(
+    `Generating image with OpenRouter (${model})...`,
+    (body.image_config as Record<string, string>),
+  );
 
   const response = await fetch(`${getBaseUrl()}/chat/completions`, {
     method: "POST",
