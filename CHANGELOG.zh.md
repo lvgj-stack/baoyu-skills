@@ -2,6 +2,16 @@
 
 [English](./CHANGELOG.md) | 中文
 
+## 1.78.0 - 2026-03-22
+
+### 新功能
+- `baoyu-url-to-markdown`：新增 URL 专用解析层，支持 X/Twitter 和 archive.ph 站点的定制化 HTML 提取
+- `baoyu-url-to-markdown`：改进 slug 生成算法，去除停用词并采用子目录输出结构
+
+### 修复
+- `baoyu-url-to-markdown`：旧版转换器保留包含媒体元素的锚标签
+- `baoyu-url-to-markdown`：更智能的标题去重，避免重复添加标题
+
 ## 1.77.0 - 2026-03-22
 
 ### 新功能

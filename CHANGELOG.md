@@ -2,6 +2,16 @@
 
 English | [中文](./CHANGELOG.zh.md)
 
+## 1.78.0 - 2026-03-22
+
+### Features
+- `baoyu-url-to-markdown`: add URL-specific parser layer for X/Twitter and archive.ph sites
+- `baoyu-url-to-markdown`: improved slug generation with stop words removal and subdirectory output structure
+
+### Fixes
+- `baoyu-url-to-markdown`: preserve anchor elements containing media in legacy converter
+- `baoyu-url-to-markdown`: smarter title deduplication to avoid redundant headings
+
 ## 1.77.0 - 2026-03-22
 
 ### Features
