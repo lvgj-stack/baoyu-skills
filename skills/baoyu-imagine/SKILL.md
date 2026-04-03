@@ -1,6 +1,6 @@
 ---
 name: baoyu-imagine
-description: AI image generation with OpenAI, Azure OpenAI, Google, OpenRouter, DashScope, MiniMax, Jimeng, Seedream and Replicate APIs. Supports text-to-image, reference images, aspect ratios, and batch generation from saved prompt files. Sequential by default; use batch parallel generation when the user already has multiple prompts or wants stable multi-image throughput. Use when user asks to generate, create, or draw images.
+description: AI image generation with OpenAI, Azure OpenAI, Google, OpenRouter, DashScope, MiniMax, Jimeng, Seedream, Replicate, and Tuzi APIs. Supports text-to-image, reference images, Tuzi single-video generation, aspect ratios, and batch generation from saved prompt files. Sequential by default; use batch parallel generation when the user already has multiple prompts or wants stable multi-image throughput. Use when user asks to generate, create, draw, or produce AI images and short videos.
 version: 1.56.4
 metadata:
   openclaw:
@@ -13,7 +13,7 @@ metadata:
 
 # Image Generation (AI SDK)
 
-Official API-based image generation. Supports OpenAI, Azure OpenAI, Google, OpenRouter, DashScope (阿里通义万象), MiniMax, Jimeng (即梦), Seedream (豆包) and Replicate providers.
+Official API-based image generation. Supports OpenAI, Azure OpenAI, Google, OpenRouter, DashScope (阿里通义万象), MiniMax, Jimeng (即梦), Seedream (豆包), Replicate, and Tuzi providers. Tuzi additionally supports single-video generation through the same CLI.
 
 ## Script Directory
 
@@ -118,6 +118,18 @@ ${BUN_X} {baseDir}/scripts/main.ts --prompt "A cat" --image out.png --provider r
 # Replicate with specific model
 ${BUN_X} {baseDir}/scripts/main.ts --prompt "A cat" --image out.png --provider replicate --model google/nano-banana
 
+# Tuzi image generation via OpenAI-compatible images API
+${BUN_X} {baseDir}/scripts/main.ts --prompt "A fox in neon rain" --image out.png --provider tuzi --model gpt-image-1
+
+# Tuzi OpenRouter-style image generation with reference image
+${BUN_X} {baseDir}/scripts/main.ts --prompt "Turn this into a cinematic poster" --image out.png --provider tuzi --model openrouter/google/gemini-2.5-flash-image --ref source.png
+
+# Tuzi text-to-video
+${BUN_X} {baseDir}/scripts/main.ts --prompt "A paper plane glides over the city at dawn" --video out.mp4 --provider tuzi --videoModel openrouter/google/veo-3
+
+# Tuzi image-to-video
+${BUN_X} {baseDir}/scripts/main.ts --prompt "Animate this still with slow cinematic motion" --video out.mp4 --provider tuzi --videoModel openrouter/google/veo-3 --ref source.png
+
 # Batch mode with saved prompt files
 ${BUN_X} {baseDir}/scripts/main.ts --batchfile batch.json
 
@@ -159,15 +171,19 @@ Paths in `promptFiles`, `image`, and `ref` are resolved relative to the batch fi
 | `--prompt <text>`, `-p` | Prompt text |
 | `--promptfiles <files...>` | Read prompt from files (concatenated) |
 | `--image <path>` | Output image path (required in single-image mode) |
+| `--video <path>` | Output video path. Enables Tuzi single-video mode; batch video is not supported in this version |
 | `--batchfile <path>` | JSON batch file for multi-image generation |
 | `--jobs <count>` | Worker count for batch mode (default: auto, max from config, built-in default 10) |
-| `--provider google\|openai\|azure\|openrouter\|dashscope\|minimax\|jimeng\|seedream\|replicate` | Force provider (default: auto-detect) |
-| `--model <id>`, `-m` | Model ID (Google: `gemini-3-pro-image-preview`; OpenAI: `gpt-image-1.5`; Azure: deployment name such as `gpt-image-1.5` or `image-prod`; OpenRouter: `google/gemini-3.1-flash-image-preview`; DashScope: `qwen-image-2.0-pro`; MiniMax: `image-01`) |
+| `--provider google\|openai\|azure\|openrouter\|dashscope\|minimax\|jimeng\|seedream\|replicate\|tuzi` | Force provider (default: auto-detect) |
+| `--model <id>`, `-m` | Image model ID (Google: `gemini-3-pro-image-preview`; OpenAI: `gpt-image-1.5`; Azure: deployment name such as `gpt-image-1.5` or `image-prod`; OpenRouter: `google/gemini-3.1-flash-image-preview`; DashScope: `qwen-image-2.0-pro`; MiniMax: `image-01`; Tuzi can also accept OpenRouter-style model IDs) |
+| `--videoModel <id>` | Video model ID for Tuzi video generation. If omitted, falls back to `TUZI_VIDEO_MODEL` |
 | `--ar <ratio>` | Aspect ratio (e.g., `16:9`, `1:1`, `4:3`) |
 | `--size <WxH>` | Size (e.g., `1024x1024`) |
 | `--quality normal\|2k` | Quality preset (default: `2k`) |
 | `--imageSize 1K\|2K\|4K` | Image size for Google/OpenRouter (default: from quality) |
-| `--ref <files...>` | Reference images. Supported by Google multimodal, OpenAI GPT Image edits, Azure OpenAI edits (PNG/JPG only), OpenRouter multimodal models, Replicate, MiniMax subject-reference, and Seedream 5.0/4.5/4.0. Not supported by Jimeng, Seedream 3.0, or removed SeedEdit 3.0 |
+| `--ref <files...>` | Reference images. Supported by Google multimodal, OpenAI GPT Image edits, Azure OpenAI edits (PNG/JPG only), OpenRouter multimodal models, Replicate, MiniMax subject-reference, Seedream 5.0/4.5/4.0, and Tuzi OpenRouter-style image/video workflows |
+| `--duration <seconds>` | Video duration for Tuzi video generation |
+| `--fps <number>` | Video FPS for Tuzi video generation |
 | `--n <count>` | Number of images |
 | `--json` | JSON output |
 
@@ -195,6 +211,10 @@ Paths in `promptFiles`, `image`, and `ref` are resolved relative to the batch fi
 | `REPLICATE_IMAGE_MODEL` | Replicate model override (default: google/nano-banana-pro) |
 | `JIMENG_IMAGE_MODEL` | Jimeng model override (default: jimeng_t2i_v40) |
 | `SEEDREAM_IMAGE_MODEL` | Seedream model override (default: doubao-seedream-5-0-260128) |
+| `TUZI_API_KEY` | Tuzi API key |
+| `TUZI_BASE_URL` | Tuzi base URL (default: `https://api.tu-zi.com/v1`) |
+| `TUZI_IMAGE_MODEL` | Tuzi image model override |
+| `TUZI_VIDEO_MODEL` | Tuzi video model override |
 | `OPENAI_BASE_URL` | Custom OpenAI endpoint |
 | `AZURE_OPENAI_BASE_URL` | Azure resource endpoint or deployment endpoint |
 | `AZURE_API_VERSION` | Azure image API version (default: `2025-04-01-preview`) |

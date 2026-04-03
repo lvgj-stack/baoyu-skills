@@ -55,7 +55,7 @@ Create a Xiaohongshu (Little Red Book) style infographic following these guideli
 
 ---
 
-Please use nano banana pro to generate the infographic based on the specifications above.
+Please generate the infographic based on the specifications above.
 ```
 
 ## Style Section Assembly
@@ -319,7 +319,7 @@ be legible but not distracting from the main content.
 
 ---
 
-Please use nano banana pro to generate the infographic based on the specifications above.
+Please generate the infographic based on the specifications above.
 ```
 
 ## Prompt Checklist

@@ -7,20 +7,25 @@ export type Provider =
   | "replicate"
   | "jimeng"
   | "seedream"
-  | "azure";
+  | "azure"
+  | "tuzi";
 export type Quality = "normal" | "2k";
 
 export type CliArgs = {
   prompt: string | null;
   promptFiles: string[];
   imagePath: string | null;
+  videoPath: string | null;
   provider: Provider | null;
   model: string | null;
+  videoModel: string | null;
   aspectRatio: string | null;
   size: string | null;
   quality: Quality | null;
   imageSize: string | null;
   referenceImages: string[];
+  duration: number | null;
+  fps: number | null;
   n: number;
   batchFile: string | null;
   jobs: number | null;
@@ -33,13 +38,17 @@ export type BatchTaskInput = {
   prompt?: string | null;
   promptFiles?: string[];
   image?: string;
+  video?: string;
   provider?: Provider | null;
   model?: string | null;
+  videoModel?: string | null;
   ar?: string | null;
   size?: string | null;
   quality?: Quality | null;
   imageSize?: "1K" | "2K" | "4K" | null;
   ref?: string[];
+  duration?: number | null;
+  fps?: number | null;
   n?: number;
 };
 
@@ -66,6 +75,7 @@ export type ExtendConfig = {
     jimeng: string | null;
     seedream: string | null;
     azure: string | null;
+    tuzi: string | null;
   };
   batch?: {
     max_workers?: number | null;

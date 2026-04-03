@@ -25,13 +25,17 @@ function makeArgs(overrides: Partial<CliArgs> = {}): CliArgs {
     prompt: null,
     promptFiles: [],
     imagePath: null,
+    videoPath: null,
     provider: null,
     model: null,
+    videoModel: null,
     aspectRatio: null,
     size: null,
     quality: null,
     imageSize: null,
     referenceImages: [],
+    duration: null,
+    fps: null,
     n: 1,
     batchFile: null,
     jobs: null,
@@ -112,6 +116,33 @@ test("parseArgs falls back to positional prompt and rejects invalid provider", (
     () => parseArgs(["--provider", "stability"]),
     /Invalid provider/,
   );
+});
+
+test("parseArgs supports Tuzi provider and video generation flags", () => {
+  const args = parseArgs([
+    "--provider",
+    "tuzi",
+    "--prompt",
+    "animate this scene",
+    "--video",
+    "out/demo",
+    "--duration",
+    "5",
+    "--fps",
+    "24",
+    "--videoModel",
+    "openrouter/google/veo-3",
+    "--ref",
+    "ref/scene.png",
+  ]);
+
+  assert.equal(args.provider, "tuzi");
+  assert.equal(args.prompt, "animate this scene");
+  assert.equal(args.videoPath, "out/demo");
+  assert.equal(args.duration, 5);
+  assert.equal(args.fps, 24);
+  assert.equal(args.videoModel, "openrouter/google/veo-3");
+  assert.deepEqual(args.referenceImages, ["ref/scene.png"]);
 });
 
 test("parseSimpleYaml parses nested defaults and provider limits", () => {

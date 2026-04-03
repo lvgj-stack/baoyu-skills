@@ -352,7 +352,7 @@ Check available skills. If multiple, ask user.
 
 | Skill Supports `--ref` | Action |
 |------------------------|--------|
-| Yes (e.g., baoyu-imagine with Google) | Pass reference images via `--ref` |
+| Yes (e.g., baoyu-imagine with Google, Tuzi) | Pass reference images via `--ref` |
 | No | Convert to text description, append to prompt |
 
 **Verification**: Before generating, confirm reference processing:

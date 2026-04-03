@@ -23,7 +23,7 @@ Guide for processing user-provided reference images in cover generation.
 
 | Situation | Action |
 |-----------|--------|
-| Model supports `--ref` (Google, OpenAI, OpenRouter, Replicate, Seedream 4.0+) | Copy image only. **No description file needed.** Pass via `--ref` at generation. |
+| Model supports `--ref` (Google, OpenAI, OpenRouter, Replicate, Seedream 4.0+, Tuzi) | Copy image only. **No description file needed.** Pass via `--ref` at generation. |
 | Model does NOT support `--ref` (Jimeng, Seedream 3.0) | Copy image + create description file. Embed description in prompt text. |
 
 **Description File Format** (only when needed):

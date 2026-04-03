@@ -14,6 +14,7 @@ import type {
 type ProviderModule = {
   getDefaultModel: () => string;
   generateImage: (prompt: string, model: string, args: CliArgs) => Promise<Uint8Array>;
+  generateVideo?: (prompt: string, model: string, args: CliArgs) => Promise<Uint8Array>;
   validateArgs?: (model: string, args: CliArgs) => void;
   getDefaultOutputExtension?: (model: string, args: CliArgs) => string;
 };
@@ -62,6 +63,7 @@ const DEFAULT_PROVIDER_RATE_LIMITS: Record<Provider, ProviderRateLimit> = {
   jimeng: { concurrency: 3, startIntervalMs: 1100 },
   seedream: { concurrency: 3, startIntervalMs: 1100 },
   azure: { concurrency: 3, startIntervalMs: 1100 },
+  tuzi: { concurrency: 2, startIntervalMs: 1200 },
 };
 
 function printUsage(): void {
@@ -74,15 +76,19 @@ Options:
   -p, --prompt <text>       Prompt text
   --promptfiles <files...>  Read prompt from files (concatenated)
   --image <path>            Output image path (required in single-image mode)
+  --video <path>            Output video path (Tuzi single-video mode)
   --batchfile <path>        JSON batch file for multi-image generation
   --jobs <count>            Worker count for batch mode (default: auto, max from config, built-in default 10)
-  --provider google|openai|openrouter|dashscope|minimax|replicate|jimeng|seedream|azure  Force provider (auto-detect by default)
+  --provider google|openai|openrouter|dashscope|minimax|replicate|jimeng|seedream|azure|tuzi  Force provider (auto-detect by default)
   -m, --model <id>          Model ID
+  --videoModel <id>         Video model ID (Tuzi single-video mode)
   --ar <ratio>              Aspect ratio (e.g., 16:9, 1:1, 4:3)
   --size <WxH>              Size (e.g., 1024x1024)
   --quality normal|2k       Quality preset (default: 2k)
   --imageSize 1K|2K|4K      Image size for Google/OpenRouter (default: from quality)
   --ref <files...>          Reference images (Google, OpenAI, Azure, OpenRouter, Replicate, MiniMax, or Seedream 4.0/4.5/5.0)
+  --duration <seconds>      Video duration in seconds (Tuzi single-video mode)
+  --fps <number>            Video frames per second (Tuzi single-video mode)
   --n <count>               Number of images for the current task (default: 1)
   --json                    JSON output
   -h, --help                Show help
@@ -142,6 +148,10 @@ Environment variables:
   AZURE_API_VERSION         Azure API version (default: 2025-04-01-preview)
   AZURE_OPENAI_IMAGE_MODEL  Backward-compatible Azure deployment/model alias (defaults to gpt-image-1.5)
   SEEDREAM_BASE_URL         Custom Seedream endpoint
+  TUZI_API_KEY              Tuzi API key
+  TUZI_BASE_URL             Custom Tuzi endpoint (default: https://api.tu-zi.com/v1)
+  TUZI_IMAGE_MODEL          Default Tuzi image model
+  TUZI_VIDEO_MODEL          Default Tuzi video model
   BAOYU_IMAGE_GEN_MAX_WORKERS  Override batch worker cap
   BAOYU_IMAGE_GEN_<PROVIDER>_CONCURRENCY  Override provider concurrency
   BAOYU_IMAGE_GEN_<PROVIDER>_START_INTERVAL_MS  Override provider start gap in ms
@@ -154,13 +164,17 @@ export function parseArgs(argv: string[]): CliArgs {
     prompt: null,
     promptFiles: [],
     imagePath: null,
+    videoPath: null,
     provider: null,
     model: null,
+    videoModel: null,
     aspectRatio: null,
     size: null,
     quality: null,
     imageSize: null,
     referenceImages: [],
+    duration: null,
+    fps: null,
     n: 1,
     batchFile: null,
     jobs: null,
@@ -217,6 +231,13 @@ export function parseArgs(argv: string[]): CliArgs {
       continue;
     }
 
+    if (a === "--video") {
+      const v = argv[++i];
+      if (!v) throw new Error("Missing value for --video");
+      out.videoPath = v;
+      continue;
+    }
+
     if (a === "--batchfile") {
       const v = argv[++i];
       if (!v) throw new Error("Missing value for --batchfile");
@@ -243,7 +264,8 @@ export function parseArgs(argv: string[]): CliArgs {
         v !== "replicate" &&
         v !== "jimeng" &&
         v !== "seedream" &&
-        v !== "azure"
+        v !== "azure" &&
+        v !== "tuzi"
       ) {
         throw new Error(`Invalid provider: ${v}`);
       }
@@ -255,6 +277,13 @@ export function parseArgs(argv: string[]): CliArgs {
       const v = argv[++i];
       if (!v) throw new Error(`Missing value for ${a}`);
       out.model = v;
+      continue;
+    }
+
+    if (a === "--videoModel") {
+      const v = argv[++i];
+      if (!v) throw new Error("Missing value for --videoModel");
+      out.videoModel = v;
       continue;
     }
 
@@ -299,6 +328,22 @@ export function parseArgs(argv: string[]): CliArgs {
       if (!v) throw new Error("Missing value for --n");
       out.n = parseInt(v, 10);
       if (isNaN(out.n) || out.n < 1) throw new Error(`Invalid count: ${v}`);
+      continue;
+    }
+
+    if (a === "--duration") {
+      const v = argv[++i];
+      if (!v) throw new Error("Missing value for --duration");
+      out.duration = parseInt(v, 10);
+      if (isNaN(out.duration) || out.duration < 1) throw new Error(`Invalid duration: ${v}`);
+      continue;
+    }
+
+    if (a === "--fps") {
+      const v = argv[++i];
+      if (!v) throw new Error("Missing value for --fps");
+      out.fps = parseInt(v, 10);
+      if (isNaN(out.fps) || out.fps < 1) throw new Error(`Invalid fps: ${v}`);
       continue;
     }
 
@@ -400,6 +445,7 @@ export function parseSimpleYaml(yaml: string): Partial<ExtendConfig> {
           jimeng: null,
           seedream: null,
           azure: null,
+          tuzi: null,
         };
         currentKey = "default_model";
         currentProvider = null;
@@ -427,7 +473,8 @@ export function parseSimpleYaml(yaml: string): Partial<ExtendConfig> {
           key === "replicate" ||
           key === "jimeng" ||
           key === "seedream" ||
-          key === "azure"
+          key === "azure" ||
+          key === "tuzi"
         )
       ) {
         config.batch ??= {};
@@ -445,7 +492,8 @@ export function parseSimpleYaml(yaml: string): Partial<ExtendConfig> {
           key === "replicate" ||
           key === "jimeng" ||
           key === "seedream" ||
-          key === "azure"
+          key === "azure" ||
+          key === "tuzi"
         )
       ) {
         const cleaned = value.replace(/['"]/g, "");
@@ -575,9 +623,10 @@ export function getConfiguredProviderRateLimits(
     jimeng: { ...DEFAULT_PROVIDER_RATE_LIMITS.jimeng },
     seedream: { ...DEFAULT_PROVIDER_RATE_LIMITS.seedream },
     azure: { ...DEFAULT_PROVIDER_RATE_LIMITS.azure },
+    tuzi: { ...DEFAULT_PROVIDER_RATE_LIMITS.tuzi },
   };
 
-  for (const provider of ["replicate", "google", "openai", "openrouter", "dashscope", "minimax", "jimeng", "seedream", "azure"] as Provider[]) {
+  for (const provider of ["replicate", "google", "openai", "openrouter", "dashscope", "minimax", "jimeng", "seedream", "azure", "tuzi"] as Provider[]) {
     const envPrefix = `BAOYU_IMAGE_GEN_${provider.toUpperCase()}`;
     const extendLimit = extendConfig.batch?.provider_limits?.[provider];
     configured[provider] = {
@@ -642,7 +691,8 @@ export function detectProvider(args: CliArgs): Provider {
     args.provider !== "openrouter" &&
     args.provider !== "replicate" &&
     args.provider !== "seedream" &&
-    args.provider !== "minimax"
+    args.provider !== "minimax" &&
+    args.provider !== "tuzi"
   ) {
     throw new Error(
       "Reference images require a ref-capable provider. Use --provider google (Gemini multimodal), --provider openai (GPT Image edits), --provider azure (Azure OpenAI), --provider openrouter (OpenRouter multimodal), --provider replicate, --provider seedream for supported Seedream models, or --provider minimax for MiniMax subject-reference workflows."
@@ -660,6 +710,7 @@ export function detectProvider(args: CliArgs): Provider {
   const hasReplicate = !!process.env.REPLICATE_API_TOKEN;
   const hasJimeng = !!(process.env.JIMENG_ACCESS_KEY_ID && process.env.JIMENG_SECRET_ACCESS_KEY);
   const hasSeedream = !!process.env.ARK_API_KEY;
+  const hasTuzi = !!process.env.TUZI_API_KEY;
   const modelProvider = inferProviderFromModel(args.model);
 
   if (modelProvider === "seedream") {
@@ -684,8 +735,9 @@ export function detectProvider(args: CliArgs): Provider {
     if (hasReplicate) return "replicate";
     if (hasSeedream) return "seedream";
     if (hasMinimax) return "minimax";
+    if (hasTuzi) return "tuzi";
     throw new Error(
-      "Reference images require Google, OpenAI, Azure, OpenRouter, Replicate, supported Seedream models, or MiniMax. Set GOOGLE_API_KEY/GEMINI_API_KEY, OPENAI_API_KEY, AZURE_OPENAI_API_KEY+AZURE_OPENAI_BASE_URL, OPENROUTER_API_KEY, REPLICATE_API_TOKEN, ARK_API_KEY, or MINIMAX_API_KEY, or remove --ref."
+      "Reference images require Google, OpenAI, Azure, OpenRouter, Replicate, supported Seedream models, MiniMax, or Tuzi. Set GOOGLE_API_KEY/GEMINI_API_KEY, OPENAI_API_KEY, AZURE_OPENAI_API_KEY+AZURE_OPENAI_BASE_URL, OPENROUTER_API_KEY, REPLICATE_API_TOKEN, ARK_API_KEY, MINIMAX_API_KEY, or TUZI_API_KEY, or remove --ref."
     );
   }
 
@@ -699,13 +751,14 @@ export function detectProvider(args: CliArgs): Provider {
     hasReplicate && "replicate",
     hasJimeng && "jimeng",
     hasSeedream && "seedream",
+    hasTuzi && "tuzi",
   ].filter(Boolean) as Provider[];
 
   if (available.length === 1) return available[0]!;
   if (available.length > 1) return available[0]!;
 
   throw new Error(
-    "No API key found. Set GOOGLE_API_KEY, GEMINI_API_KEY, OPENAI_API_KEY, AZURE_OPENAI_API_KEY+AZURE_OPENAI_BASE_URL, OPENROUTER_API_KEY, DASHSCOPE_API_KEY, MINIMAX_API_KEY, REPLICATE_API_TOKEN, JIMENG keys, or ARK_API_KEY.\n" +
+    "No API key found. Set GOOGLE_API_KEY, GEMINI_API_KEY, OPENAI_API_KEY, AZURE_OPENAI_API_KEY+AZURE_OPENAI_BASE_URL, OPENROUTER_API_KEY, DASHSCOPE_API_KEY, MINIMAX_API_KEY, REPLICATE_API_TOKEN, JIMENG keys, ARK_API_KEY, or TUZI_API_KEY.\n" +
       "Create ~/.baoyu-skills/.env or <cwd>/.baoyu-skills/.env with your keys."
   );
 }
@@ -750,6 +803,7 @@ async function loadProviderModule(provider: Provider): Promise<ProviderModule> {
   if (provider === "jimeng") return (await import("./providers/jimeng")) as ProviderModule;
   if (provider === "seedream") return (await import("./providers/seedream")) as ProviderModule;
   if (provider === "azure") return (await import("./providers/azure")) as ProviderModule;
+  if (provider === "tuzi") return (await import("./providers/tuzi")) as ProviderModule;
   return (await import("./providers/openai")) as ProviderModule;
 }
 
@@ -780,6 +834,7 @@ function getModelForProvider(
     if (provider === "jimeng" && extendConfig.default_model.jimeng) return extendConfig.default_model.jimeng;
     if (provider === "seedream" && extendConfig.default_model.seedream) return extendConfig.default_model.seedream;
     if (provider === "azure" && extendConfig.default_model.azure) return extendConfig.default_model.azure;
+    if (provider === "tuzi" && extendConfig.default_model.tuzi) return extendConfig.default_model.tuzi;
   }
   return providerModule.getDefaultModel();
 }
@@ -789,12 +844,16 @@ async function prepareSingleTask(args: CliArgs, extendConfig: Partial<ExtendConf
 
   const prompt = (await loadPromptForArgs(args)) ?? (await readPromptFromStdin());
   if (!prompt) throw new Error("Prompt is required");
-  if (!args.imagePath) throw new Error("--image is required");
+  if (!args.imagePath && !args.videoPath) throw new Error("--image or --video is required");
+  if (args.imagePath && args.videoPath) throw new Error("--image and --video cannot be used together");
   if (args.referenceImages.length > 0) await validateReferenceImages(args.referenceImages);
 
   const provider = detectProvider(args);
   const providerModule = await loadProviderModule(provider);
-  const model = getModelForProvider(provider, args.model, extendConfig, providerModule);
+  const requestedModel = args.videoPath
+    ? args.videoModel ?? args.model ?? (provider === "tuzi" ? process.env.TUZI_VIDEO_MODEL || null : null)
+    : args.model;
+  const model = getModelForProvider(provider, requestedModel, extendConfig, providerModule);
   providerModule.validateArgs?.(model, args);
   const defaultOutputExtension = providerModule.getDefaultOutputExtension?.(model, args) ?? ".png";
 
@@ -804,7 +863,7 @@ async function prepareSingleTask(args: CliArgs, extendConfig: Partial<ExtendConf
     args,
     provider,
     model,
-    outputPath: normalizeOutputImagePath(args.imagePath, defaultOutputExtension),
+    outputPath: normalizeOutputImagePath(args.videoPath ?? args.imagePath!, defaultOutputExtension),
     providerModule,
   };
 }
@@ -845,13 +904,17 @@ export function createTaskArgs(baseArgs: CliArgs, task: BatchTaskInput, batchDir
     prompt: task.prompt ?? null,
     promptFiles: task.promptFiles ? task.promptFiles.map((filePath) => resolveBatchPath(batchDir, filePath)) : [],
     imagePath: task.image ? resolveBatchPath(batchDir, task.image) : null,
+    videoPath: task.video ? resolveBatchPath(batchDir, task.video) : null,
     provider: task.provider ?? baseArgs.provider ?? null,
     model: task.model ?? baseArgs.model ?? null,
+    videoModel: task.videoModel ?? baseArgs.videoModel ?? null,
     aspectRatio: task.ar ?? baseArgs.aspectRatio ?? null,
     size: task.size ?? baseArgs.size ?? null,
     quality: task.quality ?? baseArgs.quality ?? null,
     imageSize: task.imageSize ?? baseArgs.imageSize ?? null,
     referenceImages: task.ref ? task.ref.map((filePath) => resolveBatchPath(batchDir, filePath)) : [],
+    duration: task.duration ?? baseArgs.duration ?? null,
+    fps: task.fps ?? baseArgs.fps ?? null,
     n: task.n ?? baseArgs.n,
     batchFile: null,
     jobs: baseArgs.jobs,
@@ -872,6 +935,7 @@ async function prepareBatchTasks(
   for (let i = 0; i < taskInputs.length; i++) {
     const task = taskInputs[i]!;
     const taskArgs = createTaskArgs(args, task, batchDir);
+    if (taskArgs.videoPath) throw new Error(`Task ${i + 1} uses video output, but batch video mode is not supported.`);
     const prompt = await loadPromptForArgs(taskArgs);
     if (!prompt) throw new Error(`Task ${i + 1} is missing prompt or promptFiles.`);
     if (!taskArgs.imagePath) throw new Error(`Task ${i + 1} is missing image output path.`);
@@ -914,8 +978,13 @@ async function generatePreparedTask(task: PreparedTask): Promise<TaskResult> {
   while (attempts < MAX_ATTEMPTS) {
     attempts += 1;
     try {
-      const imageData = await task.providerModule.generateImage(task.prompt, task.model, task.args);
-      await writeImage(task.outputPath, imageData);
+      const binaryData = task.args.videoPath
+        ? await task.providerModule.generateVideo?.(task.prompt, task.model, task.args)
+        : await task.providerModule.generateImage(task.prompt, task.model, task.args);
+      if (!binaryData) {
+        throw new Error(`Provider ${task.provider} does not support video generation in this skill.`);
+      }
+      await writeImage(task.outputPath, binaryData);
       return {
         id: task.id,
         provider: task.provider,
@@ -999,7 +1068,7 @@ async function runBatchTasks(
   const acquireProvider = createProviderGate(providerRateLimits);
   const workerCount = getWorkerCount(tasks.length, jobs, maxWorkers);
   console.error(`Batch mode: ${tasks.length} tasks, ${workerCount} workers, parallel mode enabled.`);
-  for (const provider of ["replicate", "google", "openai", "openrouter", "dashscope", "jimeng", "seedream", "azure"] as Provider[]) {
+  for (const provider of ["replicate", "google", "openai", "openrouter", "dashscope", "jimeng", "seedream", "azure", "tuzi"] as Provider[]) {
     const limit = providerRateLimits[provider];
     console.error(`- ${provider}: concurrency=${limit.concurrency}, startIntervalMs=${limit.startIntervalMs}`);
   }
@@ -1059,6 +1128,7 @@ async function runSingleMode(args: CliArgs, extendConfig: Partial<ExtendConfig>)
   if (args.json) {
     emitJson({
       savedImage: result.outputPath,
+      mode: task.args.videoPath ? "video" : "image",
       provider: result.provider,
       model: result.model,
       attempts: result.attempts,
