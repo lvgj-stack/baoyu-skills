@@ -175,7 +175,7 @@ Paths in `promptFiles`, `image`, and `ref` are resolved relative to the batch fi
 | `--batchfile <path>` | JSON batch file for multi-image generation |
 | `--jobs <count>` | Worker count for batch mode (default: auto, max from config, built-in default 10) |
 | `--provider google\|openai\|azure\|openrouter\|dashscope\|minimax\|jimeng\|seedream\|replicate\|tuzi` | Force provider (default: auto-detect) |
-| `--model <id>`, `-m` | Image model ID (Google: `gemini-3-pro-image-preview`; OpenAI: `gpt-image-1.5`; Azure: deployment name such as `gpt-image-1.5` or `image-prod`; OpenRouter: `google/gemini-3.1-flash-image-preview`; DashScope: `qwen-image-2.0-pro`; MiniMax: `image-01`; Tuzi can also accept OpenRouter-style model IDs) |
+| `--model <id>`, `-m` | Image model ID (Google: `gemini-3-pro-image-preview`; OpenAI: `gpt-image-1.5`; Azure: deployment name such as `gpt-image-1.5` or `image-prod`; OpenRouter: `google/gemini-3.1-flash-image-preview`; DashScope: `qwen-image-2.0-pro`; MiniMax: `image-01`; Tuzi: `gemini-3.1-flash-image-preview` (default) or any OpenRouter-style model ID) |
 | `--videoModel <id>` | Video model ID for Tuzi video generation. If omitted, falls back to `TUZI_VIDEO_MODEL` |
 | `--ar <ratio>` | Aspect ratio (e.g., `16:9`, `1:1`, `4:3`) |
 | `--size <WxH>` | Size (e.g., `1024x1024`) |
@@ -340,6 +340,23 @@ Notes:
 - If `--ref` is used, choose a multimodal model that supports image input and image output
 - `--imageSize` maps to OpenRouter `imageGenerationOptions.size`; `--size <WxH>` is converted to the nearest OpenRouter size and inferred aspect ratio when possible
 
+### Tuzi Models
+
+Tuzi is a universal model proxy — like OpenRouter, it routes to any supported model. Use full model IDs, e.g.:
+
+- `gemini-3.1-flash-image-preview` (default, fast and capable)
+- `gpt-image-1` (OpenAI-compatible images API)
+- `openrouter/google/gemini-2.5-flash-image` (OpenRouter-style routing with reference-image support)
+- `openrouter/google/gemini-3.1-flash-image-preview`
+- Other OpenAI-compatible or OpenRouter-style image model IDs
+
+Notes:
+
+- Standard model IDs (e.g. `gpt-image-1`) use the `/images/generations` endpoint
+- OpenRouter-style IDs (containing `/`) and any task with `--ref` automatically switch to `/chat/completions`
+- Tuzi supports `--ref` for all OpenRouter-style models that accept image input
+- Video generation uses `/chat/completions` with `--videoModel` (e.g. `openrouter/google/veo-3`)
+
 ### Replicate Models
 
 Supported model formats:
@@ -359,8 +376,8 @@ ${BUN_X} {baseDir}/scripts/main.ts --prompt "A cat" --image out.png --provider r
 
 ## Provider Selection
 
-1. `--ref` provided + no `--provider` → auto-select Google first, then OpenAI, then Azure, then OpenRouter, then Replicate, then Seedream, then MiniMax (MiniMax subject reference is more specialized toward character/portrait consistency)
-2. `--provider` specified → use it (if `--ref`, must be `google`, `openai`, `azure`, `openrouter`, `replicate`, `seedream`, or `minimax`)
+1. `--ref` provided + no `--provider` → auto-select Google first, then OpenAI, then Azure, then OpenRouter, then Replicate, then Seedream, then MiniMax, then Tuzi (MiniMax subject reference is more specialized toward character/portrait consistency)
+2. `--provider` specified → use it (if `--ref`, must be `google`, `openai`, `azure`, `openrouter`, `replicate`, `seedream`, `minimax`, or `tuzi`)
 3. Only one API key available → use that provider
 4. Multiple available → default to Google
 

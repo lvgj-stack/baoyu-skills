@@ -69,7 +69,7 @@ function shouldUseChatCompletionsForImage(model: string, args: CliArgs): boolean
 }
 
 export function getDefaultModel(): string {
-  return process.env.TUZI_IMAGE_MODEL || "gpt-image-1";
+  return process.env.TUZI_IMAGE_MODEL || "gemini-3.1-flash-image-preview";
 }
 
 export function getDefaultVideoModel(): string {

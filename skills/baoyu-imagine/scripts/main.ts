@@ -86,7 +86,7 @@ Options:
   --size <WxH>              Size (e.g., 1024x1024)
   --quality normal|2k       Quality preset (default: 2k)
   --imageSize 1K|2K|4K      Image size for Google/OpenRouter (default: from quality)
-  --ref <files...>          Reference images (Google, OpenAI, Azure, OpenRouter, Replicate, MiniMax, or Seedream 4.0/4.5/5.0)
+  --ref <files...>          Reference images (Google, OpenAI, Azure, OpenRouter, Replicate, MiniMax, Seedream 4.0/4.5/5.0, or Tuzi)
   --duration <seconds>      Video duration in seconds (Tuzi single-video mode)
   --fps <number>            Video frames per second (Tuzi single-video mode)
   --n <count>               Number of images for the current task (default: 1)
@@ -695,7 +695,7 @@ export function detectProvider(args: CliArgs): Provider {
     args.provider !== "tuzi"
   ) {
     throw new Error(
-      "Reference images require a ref-capable provider. Use --provider google (Gemini multimodal), --provider openai (GPT Image edits), --provider azure (Azure OpenAI), --provider openrouter (OpenRouter multimodal), --provider replicate, --provider seedream for supported Seedream models, or --provider minimax for MiniMax subject-reference workflows."
+      "Reference images require a ref-capable provider. Use --provider google (Gemini multimodal), --provider openai (GPT Image edits), --provider azure (Azure OpenAI), --provider openrouter (OpenRouter multimodal), --provider replicate, --provider seedream for supported Seedream models, --provider minimax for MiniMax subject-reference workflows, or --provider tuzi (universal proxy, supports all OpenRouter-style models with --ref)."
     );
   }
 
