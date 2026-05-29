@@ -1128,7 +1128,7 @@ Custom style descriptions are also accepted, e.g., `--style "poetic and lyrical"
 
 #### baoyu-wechat-summary
 
-Summarize WeChat group chat highlights into a structured digest. Extracts topics, quotes, and stats from group messages using [wx-cli](https://github.com/jackwener/wx-cli). Maintains per-group history and per-user profiles across runs. Supports normal and roast (毒舌) versions.
+Summarize WeChat group chat highlights into a structured digest. Extracts topics, quotes, and stats from group messages using [wx-cli](https://github.com/jackwener/wx-cli). Maintains per-group history and per-user profiles across runs. Supports normal and roast (毒舌) versions, and answers `@bot` questions raised in the chat.
 
 ```bash
 # Summarize a group's recent messages
